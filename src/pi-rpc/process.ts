@@ -70,6 +70,9 @@ type PiExtensionUiResponse =
 
 export type PiRpcEvent = Record<string, unknown>
 
+/** What pi did with a prompt: started a run, queued it, or handled it without one. */
+export type PiPromptDisposition = 'started' | 'queued' | 'handled'
+
 /** Maximum wait for an auxiliary context-usage update. */
 export const SESSION_STATS_TIMEOUT_MS = 1_000
 
@@ -256,9 +259,16 @@ export class PiRpcProcess {
     return lines
   }
 
-  async prompt(message: string, images: unknown[] = []): Promise<void> {
+  /**
+   * Send a prompt; resolve with pi's disposition for it once accepted.
+   * `"handled"` means no run started (an extension command ran instead), so no
+   * `agent_settled` will follow.
+   */
+  async prompt(message: string, images: unknown[] = []): Promise<PiPromptDisposition | undefined> {
     const res = await this.request({ type: 'prompt', message, images })
     if (!res.success) throw new Error(`pi prompt failed: ${res.error ?? JSON.stringify(res.data)}`)
+    const disposition = (res.data as { disposition?: unknown } | undefined)?.disposition
+    return typeof disposition === 'string' ? (disposition as PiPromptDisposition) : undefined
   }
 
   async abort(): Promise<void> {

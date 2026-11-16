@@ -167,7 +167,7 @@ Other built-in commands:
 
 - Skill commands can be enabled in pi settings and will appear in the slash command list in ACP client as `/skill:skill-name`.
 
-**Note**: Slash commands provided by pi extensions are not currently supported.
+**Note**: Slash commands provided by pi extensions run when sent as a prompt, but are not listed in the ACP client's command list. Their `input`/`editor` UI requests are not supported.
 
 ## Authentication (ACP Registry support)
 

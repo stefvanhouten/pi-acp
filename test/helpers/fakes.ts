@@ -46,8 +46,12 @@ export class FakePiRpcProcess {
     for (const h of this.handlers) h(ev)
   }
 
-  async prompt(message: string, attachments: unknown[] = []): Promise<void> {
+  /** What `prompt()` reports pi did with the prompt. */
+  promptDisposition: 'started' | 'queued' | 'handled' | undefined = undefined
+
+  async prompt(message: string, attachments: unknown[] = []): Promise<'started' | 'queued' | 'handled' | undefined> {
     this.prompts.push({ message, attachments })
+    return this.promptDisposition
   }
 
   async abort(): Promise<void> {

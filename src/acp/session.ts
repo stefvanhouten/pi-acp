@@ -608,31 +608,43 @@ export class PiAcpSession {
     // Kick off pi, but completion is determined by pi events, not the RPC response.
     // The prompt RPC only acknowledges acceptance; retry, compaction, or queued
     // continuations may emit multiple `agent_end` events before `agent_settled`.
-    this.proc.prompt(t.message, t.images).catch(err => {
-      // If the subprocess errors before we get `agent_settled`, treat as error unless cancelled.
-      // Also ensure we flush any already-enqueued updates first.
-      void this.flushEmits().finally(() => {
-        // If this looks like an auth/config issue, surface AUTH_REQUIRED so clients can offer terminal login.
-        const authErr = maybeAuthRequiredError(err)
-        if (authErr) {
-          this.pendingTurn?.reject(authErr)
-        } else {
-          const reason: StopReason = this.cancelRequested ? 'cancelled' : 'error'
-          this.pendingTurn?.resolve(reason)
+    const turn = this.pendingTurn
+    this.proc
+      .prompt(t.message, t.images)
+      .then(disposition => {
+        // An extension command ran instead of a run (e.g. `/my-command`): pi
+        // emits no `agent_settled` for it, so end the turn here.  A command that
+        // started a run itself (say, via `pi.sendUserMessage`) has already
+        // emitted `agent_start`; that run settles the turn as usual.
+        if (disposition === 'handled' && this.pendingTurn === turn && !this.inAgentLoop) {
+          void this.settleTurn()
         }
-
-        this.pendingTurn = null
-        this.inAgentLoop = false
-
-        // If the prompt failed, do not automatically proceed—pi may be unhealthy.
-        // But we still clear the queueDepth metadata.
-        this.emit({
-          sessionUpdate: 'session_info_update',
-          _meta: { piAcp: { queueDepth: this.turnQueue.length, running: false } }
-        })
       })
-      void err
-    })
+      .catch(err => {
+        // If the subprocess errors before we get `agent_settled`, treat as error unless cancelled.
+        // Also ensure we flush any already-enqueued updates first.
+        void this.flushEmits().finally(() => {
+          // If this looks like an auth/config issue, surface AUTH_REQUIRED so clients can offer terminal login.
+          const authErr = maybeAuthRequiredError(err)
+          if (authErr) {
+            this.pendingTurn?.reject(authErr)
+          } else {
+            const reason: StopReason = this.cancelRequested ? 'cancelled' : 'error'
+            this.pendingTurn?.resolve(reason)
+          }
+
+          this.pendingTurn = null
+          this.inAgentLoop = false
+
+          // If the prompt failed, do not automatically proceed—pi may be unhealthy.
+          // But we still clear the queueDepth metadata.
+          this.emit({
+            sessionUpdate: 'session_info_update',
+            _meta: { piAcp: { queueDepth: this.turnQueue.length, running: false } }
+          })
+        })
+        void err
+      })
   }
 
   private handlePiEvent(ev: PiRpcEvent) {
