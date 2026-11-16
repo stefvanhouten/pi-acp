@@ -512,6 +512,35 @@ export class PiAcpSession {
     await this.flushEmits()
   }
 
+  private contextUsageRefreshing = false
+  private contextUsageStale = false
+
+  /**
+   * Publish the context usage now, without making the caller wait, so clients
+   * can follow it while the agent works rather than only when the turn ends.
+   * Requests never overlap: events arriving while one is in flight cause one
+   * more request after it, so a burst of events costs at most two.
+   */
+  private refreshContextUsage(): void {
+    this.contextUsageStale = true
+    if (this.contextUsageRefreshing || typeof this.proc.getSessionStats !== 'function') return
+
+    this.contextUsageRefreshing = true
+    void (async () => {
+      try {
+        while (this.contextUsageStale) {
+          this.contextUsageStale = false
+          const update = toUsageUpdate(await this.proc.getSessionStats(SESSION_STATS_TIMEOUT_MS))
+          if (update) this.emit(update)
+        }
+      } catch {
+        // Context usage is auxiliary; the end of the turn publishes it again.
+      } finally {
+        this.contextUsageRefreshing = false
+      }
+    })()
+  }
+
   private async settleTurn(): Promise<void> {
     // Ensure all updates derived from pi events (plus the final usage update) are
     // delivered before we resolve the ACP `session/prompt` request.
@@ -955,6 +984,15 @@ export class PiAcpSession {
             text: 'Automatic compaction finished; context was summarized to continue the session.'
           } satisfies ContentBlock
         })
+        this.refreshContextUsage()
+        break
+      }
+
+      case 'message_end': {
+        // The context grows with each finished message: the prompt, every
+        // assistant reply (pi counts the provider's reported usage from then on)
+        // and every tool result.
+        this.refreshContextUsage()
         break
       }
 

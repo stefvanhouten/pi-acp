@@ -202,3 +202,72 @@ test('PiAcpAgent: switching the thinking level does not publish context usage', 
     false
   )
 })
+
+test('PiAcpSession: context usage follows the turn, not only its end', async () => {
+  const conn = new FakeAgentSideConnection()
+  const proc = new FakePiRpcProcess()
+  const session = makeSession(proc, conn)
+  const used = () => conn.updates.map(u => (u.update as any).used)
+
+  const turn = session.prompt('go')
+  proc.emit({ type: 'agent_start' })
+
+  proc.sessionStats = { contextUsage: { tokens: 1_000, contextWindow: 100_000 } }
+  proc.emit({ type: 'message_end', message: { role: 'user' } })
+  await drainScheduledWork()
+  assert.deepEqual(used().filter(Boolean), [1_000])
+
+  proc.sessionStats = { contextUsage: { tokens: 4_000, contextWindow: 100_000 } }
+  proc.emit({ type: 'message_end', message: { role: 'assistant' } })
+  await drainScheduledWork()
+  assert.deepEqual(used().filter(Boolean), [1_000, 4_000])
+
+  // Still working: the turn has not ended.
+  let ended = false
+  void turn.then(() => (ended = true))
+  await drainScheduledWork()
+  assert.equal(ended, false)
+
+  proc.sessionStats = { contextUsage: { tokens: 4_100, contextWindow: 100_000 } }
+  proc.emit({ type: 'agent_end' })
+  proc.emit({ type: 'agent_settled' })
+  assert.equal(await turn, 'end_turn')
+  assert.equal(used().filter(Boolean).at(-1), 4_100)
+})
+
+test('PiAcpSession: a burst of finished messages costs at most two stats requests', async () => {
+  const conn = new FakeAgentSideConnection()
+  const proc = new FakePiRpcProcess()
+  const session = makeSession(proc, conn)
+  proc.sessionStats = { contextUsage: { tokens: 2_000, contextWindow: 100_000 } }
+
+  void session.prompt('go')
+  for (let i = 0; i < 10; i += 1) proc.emit({ type: 'message_end', message: { role: 'toolResult' } })
+  await drainScheduledWork()
+
+  assert.equal(proc.getSessionStatsCount, 2)
+})
+
+test('PiAcpSession: a failing stats request mid-turn does not disturb the turn', async () => {
+  const conn = new FakeAgentSideConnection()
+  const proc = new FakePiRpcProcess()
+  const session = makeSession(proc, conn)
+  proc.sessionStatsError = new Error('stats unavailable')
+
+  const turn = session.prompt('go')
+  proc.emit({ type: 'message_end', message: { role: 'assistant' } })
+  await drainScheduledWork()
+
+  // Later refreshes still work once pi answers again.
+  proc.sessionStatsError = null
+  proc.sessionStats = { contextUsage: { tokens: 3_000, contextWindow: 100_000 } }
+  proc.emit({ type: 'message_end', message: { role: 'assistant' } })
+  await drainScheduledWork()
+  assert.deepEqual(
+    conn.updates.filter(u => u.update.sessionUpdate === 'usage_update').map(u => (u.update as any).used),
+    [3_000]
+  )
+
+  proc.emit({ type: 'agent_settled' })
+  assert.equal(await turn, 'end_turn')
+})
