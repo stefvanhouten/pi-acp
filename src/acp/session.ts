@@ -33,6 +33,7 @@ import {
   isBashTool
 } from './translate/bash.js'
 import { toolResultToText } from './translate/pi-tools.js'
+import { extensionBlockForEntry, extensionBlockUpdates } from './translate/extension-messages.js'
 
 type SessionCreateParams = {
   cwd: string
@@ -993,6 +994,14 @@ export class PiAcpSession {
         // assistant reply (pi counts the provider's reported usage from then on)
         // and every tool result.
         this.refreshContextUsage()
+        break
+      }
+
+      case 'entry_appended': {
+        // An extension added to the session, e.g. a stop hook's message at
+        // `agent_before_settle`; show it as a block.
+        const block = extensionBlockForEntry((ev as any).entry)
+        if (block) for (const update of extensionBlockUpdates(block)) this.emit(update)
         break
       }
 

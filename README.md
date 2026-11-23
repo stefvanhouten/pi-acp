@@ -171,6 +171,11 @@ Other built-in commands:
 
 - Slash commands registered by pi extensions (`pi.registerCommand`) appear in the slash command list and run when sent as a prompt; the turn ends when the command returns. Their `input`/`editor` UI requests and terminal-only UI are not supported.
 
+#### 5) Extension messages
+
+- A custom message an extension adds with `display: true` (for example a stop hook at `agent_before_settle` sending the agent back) is shown as a completed tool call of kind `other`, titled after its `customType`, live and when a session is loaded. `details.acp` (`{ title?, status?: 'completed' | 'failed' }`) overrides the title and status.
+- A `custom` session entry whose `data.acp` has a `text` (`{ title?, status?, text }`) is shown the same way while the session runs. It never reaches the model, so it suits status like "check passed"; Pi does not replay custom entries on load.
+
 ## Authentication (ACP Registry support)
 
 This agent supports **Terminal Auth** for the [ACP Registry](https://agentclientprotocol.com/get-started/registry).

@@ -30,6 +30,7 @@ import { PiRpcProcess } from '../pi-rpc/process.js'
 import { listPiSessions, findPiSession, readPiSessionTitle } from './pi-sessions.js'
 import { normalizePiAssistantText, normalizePiMessageText } from './translate/pi-messages.js'
 import { toolResultToText } from './translate/pi-tools.js'
+import { extensionBlockForMessage, extensionBlockUpdates } from './translate/extension-messages.js'
 import {
   bashCommand,
   bashExitCode,
@@ -977,8 +978,16 @@ export class PiAcpAgent implements ACPAgent {
     const data = (await proc.getMessages()) as any
     const messages = Array.isArray(data?.messages) ? data.messages : []
 
-    for (const m of messages) {
+    for (const [index, m] of messages.entries()) {
       const role = String(m?.role ?? '')
+
+      if (role === 'custom') {
+        const block = extensionBlockForMessage(m, `replay-${index}`)
+        for (const update of block ? extensionBlockUpdates(block) : []) {
+          await this.conn.sessionUpdate({ sessionId: session.sessionId, update })
+        }
+        continue
+      }
 
       if (role === 'user') {
         const text = normalizePiMessageText(m?.content)
