@@ -9,3 +9,13 @@ dist
 
 /agentDocs
 .DS_Store
+
+# Secrets: never commit (public fork)
+.env
+.env.*
+.npmrc
+*.pem
+*.key
+*.p12
+.authinfo
+auth.json
