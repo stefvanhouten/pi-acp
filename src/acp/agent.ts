@@ -1,7 +1,5 @@
 import {
   RequestError,
-  type Agent as ACPAgent,
-  type AgentSideConnection,
   type AuthenticateRequest,
   type CancelNotification,
   type InitializeRequest,
@@ -22,8 +20,9 @@ import {
   type StopReason,
   type DeleteSessionRequest,
   type DeleteSessionResponse
-} from '@agentclientprotocol/sdk'
+} from '@agentclientprotocol/sdk/unstable'
 import { getAuthMethods } from './auth.js'
+import type { ClientConn } from './client-conn.js'
 import { SessionManager, type PiAcpSession } from './session.js'
 import { SessionStore } from './session-store.js'
 import { PiRpcProcess } from '../pi-rpc/process.js'
@@ -48,7 +47,7 @@ import { toAvailableCommandsFromPiGetCommands } from './pi-commands.js'
 import { maybeAuthRequiredError } from './auth-required.js'
 import { isAbsolute } from 'node:path'
 import { existsSync, readFileSync, realpathSync, readdirSync, statSync, unlinkSync } from 'node:fs'
-import type { AvailableCommand } from '@agentclientprotocol/sdk'
+import type { AvailableCommand } from '@agentclientprotocol/sdk/unstable'
 import { join, dirname, basename } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
@@ -120,8 +119,8 @@ import { fileURLToPath } from 'node:url'
 
 const pkg = readNearestPackageJson(import.meta.url)
 
-export class PiAcpAgent implements ACPAgent {
-  private readonly conn: AgentSideConnection
+export class PiAcpAgent {
+  private readonly conn: ClientConn
   private readonly sessions = new SessionManager()
   private readonly store = new SessionStore()
   private readonly restoringSessions = new Map<string, Promise<PiAcpSession>>()
@@ -133,7 +132,7 @@ export class PiAcpAgent implements ACPAgent {
   // Remember recent session cwd and use it as the default filter.
   private lastSessionCwd: string | null = null
 
-  constructor(conn: AgentSideConnection, _config?: unknown) {
+  constructor(conn: ClientConn, _config?: unknown) {
     this.conn = conn
     void _config
   }
@@ -1378,7 +1377,7 @@ async function getModelState(
 }
 
 async function emitConfigOptionsUpdate(
-  conn: AgentSideConnection,
+  conn: ClientConn,
   sessionId: string,
   proc: PiRpcProcess
 ): Promise<SessionConfigOption[]> {

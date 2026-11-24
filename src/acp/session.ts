@@ -1,5 +1,4 @@
 import type {
-  AgentSideConnection,
   ContentBlock,
   McpServer,
   PermissionOption,
@@ -7,8 +6,8 @@ import type {
   ToolCallContent,
   ToolCallLocation,
   ToolKind
-} from '@agentclientprotocol/sdk'
-import { RequestError } from '@agentclientprotocol/sdk'
+} from '@agentclientprotocol/sdk/unstable'
+import { RequestError } from '@agentclientprotocol/sdk/unstable'
 import { readFileSync } from 'node:fs'
 import { isAbsolute, resolve as resolvePath } from 'node:path'
 import {
@@ -19,6 +18,7 @@ import {
   type PiSessionStats
 } from '../pi-rpc/process.js'
 import { maybeAuthRequiredError } from './auth-required.js'
+import type { ClientConn } from './client-conn.js'
 import { SessionStore } from './session-store.js'
 import { expandSlashCommand, type FileSlashCommand } from './slash-commands.js'
 import {
@@ -38,7 +38,7 @@ import { extensionBlockForEntry, extensionBlockUpdates } from './translate/exten
 type SessionCreateParams = {
   cwd: string
   mcpServers: McpServer[]
-  conn: AgentSideConnection
+  conn: ClientConn
   fileCommands?: import('./slash-commands.js').FileSlashCommand[]
   piCommand?: string
 }
@@ -59,7 +59,7 @@ type QueuedTurn = {
   reject: (err: unknown) => void
 }
 
-type PermissionResponse = Awaited<ReturnType<AgentSideConnection['requestPermission']>>
+type PermissionResponse = Awaited<ReturnType<ClientConn['requestPermission']>>
 
 const CONFIRM_PERMISSION_OPTIONS: PermissionOption[] = [
   { optionId: 'yes', name: 'Yes', kind: 'allow_once' },
@@ -293,7 +293,7 @@ export class PiAcpSession {
   private titleUpdateQueue: Promise<void> = Promise.resolve()
 
   readonly proc: PiRpcProcess
-  private readonly conn: AgentSideConnection
+  private readonly conn: ClientConn
   private readonly fileCommands: FileSlashCommand[]
 
   // Used to map abort semantics to ACP stopReason.
@@ -330,7 +330,7 @@ export class PiAcpSession {
     cwd: string
     mcpServers: McpServer[]
     proc: PiRpcProcess
-    conn: AgentSideConnection
+    conn: ClientConn
     fileCommands?: FileSlashCommand[]
     autoTitle?: boolean
   }) {

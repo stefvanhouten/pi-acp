@@ -17,10 +17,13 @@ Pi RPC mode is effectively single-session, so the adapter maps:
 
 ### ACP server wiring (modeled after opencode)
 
-Use `@agentclientprotocol/sdk`:
+Use `@agentclientprotocol/sdk/unstable` (the default entrypoint strips unstable fields such as
+`configOptions` and `models`, which pi-acp relies on):
 
 - `ndJsonStream(input, output)` to speak ACP over stdio
-- `new AgentSideConnection((conn) => new PiAcpAgent(conn, config), stream)`
+- `createPiAcpApp()` (`src/acp/app.ts`) registers each ACP method on an `agent()` app and
+  creates one `PiAcpAgent` per connection; `app.connect(stream)` serves it
+- `PiAcpAgent` and sessions call the client through `ClientConn` (`src/acp/client-conn.ts`)
 
 ## Implementation constraints / decisions
 
